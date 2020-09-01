@@ -1,4 +1,4 @@
-# node-js-getting-started
+# install server on your pc
 
 A barebones Node.js app using [Express 4](http://expressjs.com/).
 
