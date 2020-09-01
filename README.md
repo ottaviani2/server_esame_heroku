@@ -1,9 +1,5 @@
 # install server on your pc
 
-A barebones Node.js app using [Express 4](http://expressjs.com/).
-
-This application supports the [Getting Started on Heroku with Node.js](https://devcenter.heroku.com/articles/getting-started-with-nodejs) article - check it out.
-
 ## Running Locally
 
 Make sure you have [Node.js](http://nodejs.org/) and the [Heroku CLI](https://cli.heroku.com/) installed.
@@ -26,9 +22,10 @@ $ heroku open
 ```
 or
 
-[![Deploy to Heroku](https://www.herokucdn.com/deploy/button.png)](https://heroku.com/deploy)
-
 ## Documentation
+
+Read Guida.odt in this repository.
+
 
 For more information about using Node.js on Heroku, see these Dev Center articles:
 
