@@ -5,6 +5,9 @@ const bodyparser = require('body-parser');
 const cookieparser = require("cookie-parser");
 const http = require('http');
 const path = require('path');
+const fs = require('fs');
+
+
 const { Pool } = require('pg');
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -13,6 +16,7 @@ const pool = new Pool({
   }
 });
 
+
 app.use(express.json());
 app.use(bodyparser.json());
 app.use(cookieparser());
@@ -20,6 +24,9 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 //LOGIN
 const cookies = new Map();
+
+//CARRELLO
+const cart = new Map();
 
 //LOIGN CON COOKIES
 function attemptAuth(req){
@@ -33,14 +40,45 @@ function attemptAuth(req){
     }
 }
 
+
+//CARRELLO
+function shopping(req){
+    if(req.params.shopping_id){
+        if(cart.has(req.params.shopping_id)){
+            const user = JSON.stringify(cookies.get(req.cart.mail));
+            console.log("Utente "+ user +" accede a carrello");
+            return true;
+        }
+        return false;
+    }
+}
+
+
+class RequestHandler {
+    constructor(request, response) {
+        this.req = request;
+        this.res = response;
+    }
+    handle(path, method, cb) {
+        let self = this;
+        if (this.req.url === path && this.req.method === method) {
+            cb(self.req, self.res);
+        }
+    }
+}
+
+
+//Sviluppare RESTFULL
+
+
 //MySQL
 /*
-var mysql = require('mysql');
+const mysql = require('mysql');
 var con = mysql.createConnection({
-      host: 'localhost',
-	  user: 'root',
-	  password: '',
-	  database: 'serra'
+      host: '89.40.173.81',
+	  user: 'fiqoaque_admin',
+	  password: 'Greghi_girasoli_90',
+	  database: 'fiqoaque_serra'
 });
 con.connect((error) => {
     if(!error)
@@ -52,6 +90,14 @@ con.connect((error) => {
 
 app.set('views', path.join(__dirname, 'views'))
 app.set('view engine', 'ejs')
+
+app.get('/', (req,res) => {
+    let home = fs.readFileSync('./vivaio/index.php').toString();
+        res.writeHead(200, {
+            'Content-Type': 'text/html'
+        });
+        res.end(home);
+})
 
 app.get('/db', async (req, res) => {
     
@@ -66,9 +112,9 @@ app.get('/db', async (req, res) => {
       console.error(err);
       res.send("Error " + err);
     }
-  })
+})
 
-app.get('/users', async (req, res) => {
+app.get('/users/all', async (req, res) => {
     if(!attemptAuth(req)) {
 		res.sendStatus(401).end();
 		return;
@@ -120,7 +166,8 @@ app.post('/users/login', async (req, res) => {
 
     //genera il codice cookie
     const salt_s = await bcrypt.genSalt();
-    const sessionId = await bcrypt.hash(password, salt_s);
+    const salt_c = await bcrypt.genSalt();
+    const sessionId = await bcrypt.hash(salt_c, salt_s);
 
     console.log("richiesta login "+username);
 
@@ -143,7 +190,7 @@ app.post('/users/login', async (req, res) => {
 
 //OPERAZIONI CRUD
 //CREATE
-app.post('/pianta', async (req, res) => {
+app.post('/pianta/new', async (req, res) => {
     const id = req.body.id;
     const clima = req.body.clima;    
     const nome = req.body.name;
@@ -163,7 +210,7 @@ app.post('/pianta', async (req, res) => {
         const client = await pool.connect();
         const result = await client.query("INSERT INTO tipo_pianta(Codice_tipo,Fascia_climatica, Nome_latino, Nome_comune) VALUES ('"+id+"','"+clima+"','"+latin+"','"+nome+"')");
         res.set('content-type', 'application/json');
-        res.sendStatus(200).end();
+        res.sendStatus(201).end();
         client.release();
     } catch (err) {
         console.error(err);
@@ -172,17 +219,17 @@ app.post('/pianta', async (req, res) => {
 });
 
 //READ
-app.get('/pianta', async (req, res) => {
-	if(!req.accepts('application/json')) {
+app.get('/pianta/:name', async (req, res) => {
+	/*if(!req.accepts('application/json')) {
 		res.sendStatus(406).end();
 		return;
-    }
+    }*/
     if(!attemptAuth(req)) {
 		res.sendStatus(401).end();
 		return;
     }
 
-    const nome = req.body.name;
+    const nome = req.params.name;
 
     console.log(req.headers);
 	console.log("Recieve Get request for Pianta, name: "+nome);
@@ -190,7 +237,7 @@ app.get('/pianta', async (req, res) => {
 	try {
         const client = await pool.connect();
         const result = await client.query("SELECT Lotto, ubicazione.Descrizione, Quantita, lotto.Data_arrivo, lotto.Prezzo_vendita FROM pianta_ubicata JOIN lotto ON pianta_ubicata.Lotto = lotto.Codice_lotto JOIN tipo_pianta ON tipo_pianta.Codice_tipo = lotto.Tipo_pianta JOIN ubicazione ON pianta_ubicata.Ubicazione = ubicazione.Codice_ubicazione WHERE tipo_pianta.Nome_comune = '"+nome+"' OR tipo_pianta.Nome_latino = '"+nome+"'");
-        res.set('content-type', 'application/json');
+        //res.set('content-type', 'application/json');
         res.send(result.rows).end();
         client.release();
     } catch (err) {
@@ -200,7 +247,7 @@ app.get('/pianta', async (req, res) => {
 });
 
 //UPDATE
-app.put('/pianta/c_name', async (req, res) => {
+app.put('/pianta/c_name/:name', async (req, res) => {
 	if(!req.accepts('application/json')) {
 		res.sendStatus(406).end();
 		return;
@@ -210,13 +257,13 @@ app.put('/pianta/c_name', async (req, res) => {
 		return;
     }
 
-    const nome = req.body.name;
+    const name = req.params.name;
     const newname = req.body.newname;
 
     console.log("Recieve Put request for Pianta, name: "+nome);
     try {
         const client = await pool.connect();
-        const result = await client.query("UPDATE tipo_pianta SET Nome_comune='"+newname+"' WHERE Nome_comune ='"+nome+"'");
+        const result = await client.query("UPDATE tipo_pianta SET Nome_comune='"+newname+"' WHERE Nome_comune ='"+name+"'");
         res.set('content-type', 'application/json');
         res.sendStatus(200).end();
         client.release();
@@ -226,24 +273,25 @@ app.put('/pianta/c_name', async (req, res) => {
     }
 });
 
+//Controlla modifiche
 //DELETE
-app.delete('/pianta', async (req, res) => {
-	if(!req.accepts('application/json')) {
+app.delete('/pianta/:name', async (req, res) => {
+	/*if(!req.accepts('application/json')) {
 		res.sendStatus(406).end();
 		return;
-    }
+    }*/
     if(!attemptAuth(req)) {
 		res.sendStatus(401).end();
 		return;
     }
 
-    const nome = req.body.name;
+    const nome = req.params.name;
 
     console.log("Recieve Post request for Pianta, name: "+nome);
     try {
         const client = await pool.connect();
-        const result = await client.query("DELETE FROM tipo_pianta  WHERE Nome_comune ='"+nome+"' OR Nome_latino = '"+nome+"'");
-        res.set('content-type', 'application/json');
+        const result = await client.query("DELETE FROM tipo_pianta  WHERE Nome_latino = '"+nome+"'");
+        //res.set('content-type', 'application/json');
         res.sendStatus(200).end();
         client.release();
     } catch (err) {
@@ -254,17 +302,17 @@ app.delete('/pianta', async (req, res) => {
 
 
 //RICHIESTA ESTERNA OPENWEATHERMAP
-app.get('/weather', async (req, res) => {
-    if(!req.accepts('application/json')) {
+app.get('/weather/:city', async (req, res) => {
+    /*if(!req.accepts('application/json')) {
 		res.sendStatus(406).end();
 		return;
-    }
+    }*/
     if(!attemptAuth(req)) {
 		res.sendStatus(401).end();
 		return;
     }
     try{
-    const city = req.body.city;
+    const city = req.params.city;
     var resp = '';
         
     const options = {
@@ -291,6 +339,67 @@ app.get('/weather', async (req, res) => {
         res.sendStatus(401).end();
     }
 })
+
+app.get('/cart/start/:client', async (req, res) => {
+    /*if(!req.accepts('application/json')) {
+		res.sendStatus(406).end();
+		return;
+    }*/
+    if(!attemptAuth(req)) {
+		res.sendStatus(401).end();
+		return;
+    }
+try{
+    const id_client = req.params.client;
+    const user = cookies.get(req.cookies.auth);
+    
+    const client = await pool.connect();
+    const result = await client.query("INSERT INTO shopping_session(id_utente, id_cliente) VALUES ('"+user+"','"+id_client+"')");
+    const result1 = await client.query("SELECT id FROM shopping_session WHERE id_utente = '"+user+"' AND id_cliente = '"+id_client+"'");
+    const id_shopping = result1.rows[0].id;
+    cart.set(id_shopping ,{mail: user});
+    console.log("insert: "+id_shopping);
+    res.set('content-type', 'application/json');
+    res.send('{"shopping_id": "'+id_shopping+'"}').end();
+    client.release();
+} catch (err) {
+    console.error(err);
+    res.status(403).send();
+}
+})
+
+app.get('/cart/:shopping_id', async (req, res) => {
+    /*if(!req.accepts('application/json')) {
+		res.sendStatus(406).end();
+		return;
+    }*/
+    if(!attemptAuth(req)) {
+		res.sendStatus(401).end();
+		return;
+    }
+    console.log(req.params.shopping_id);
+
+    if(!shopping(req)){
+        res.sendStatus(401).end();
+        return;
+    }
+
+    const cod_tipo = req.body.cod_tipo;
+    const number = req.body.number;
+    const shopping_id = req.params.shopping_id;
+
+    try {
+        const client = await pool.connect();
+        const result1 = await client.query("INSERT INTO cart(id_shopping, codice_tipo, quantità) VALUES ('"+shopping_id+"','"+cod_tipo+"',"+number+")");
+        res.status(200).send(result1).end(); 
+        client.release();
+    } catch (err) {
+        console.error(err);
+        res.status(403).send();
+    }
+})
+
+
 
 //caricare la porta dalle variabili di ambiente di Heroku process.env.PORT
 app.listen(process.env.PORT, ()=>console.log("Express server is running"))
